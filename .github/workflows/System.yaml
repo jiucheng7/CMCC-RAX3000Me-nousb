@@ -1,0 +1,53 @@
+name: System Environment Check
+on: 
+  workflow_dispatch:  # 支持手动触发[5](@ref)
+
+jobs:
+  system-check:
+    runs-on: ubuntu-latest  # 推荐使用最新Ubuntu环境[1,5](@ref)
+    steps:
+      - name: Check system info
+        run: |
+          # 输出基础系统信息
+          echo "### 系统环境报告 ⚙️"
+          echo "---"
+          echo "系统版本: $(lsb_release -d | cut -f2-)"
+          echo "内核版本: $(uname -r)"
+          echo "CPU架构: $(uname -m)"
+          echo "CPU核心数: $(nproc)"
+          echo "内存总量: $(free -m | awk '/Mem/ {print $2}') MB"
+          echo "---"
+
+          # 详细磁盘空间检查
+          echo "### 存储空间分析 💾"
+          df -h | grep -v tmpfs  # 排除临时文件系统
+          echo "---"
+
+          # 专项检查工作目录
+          echo "工作区路径: $GITHUB_WORKSPACE"
+          du -sh $GITHUB_WORKSPACE | awk '{print "工作区占用: "$1}'
+          
+          # 检查常见缓存目录
+          echo "Node_modules缓存: $(du -sh /usr/local/lib/node_modules 2>/dev/null || echo '未找到')"
+          echo "Docker镜像占用: $(docker system df --format '{{.Size}}' 2>/dev/null || echo 'Docker未安装')"
+          echo "---"
+
+          # 环境变量诊断
+          echo "### 运行环境变量 🛠️"
+          echo "Runner类型: ${{ runner.os }}"
+          echo "Job容器模式: ${{ job.container }}"
+          echo "GitHub API: ${{ github.api_url }}"
+
+      - name: Generate report
+        if: always()  # 即使步骤失败也执行
+        run: |
+          # 将关键指标写入文件
+          echo "SYSTEM_REPORT=$(date +%Y-%m-%d_%H-%M-%S).log" >> $GITHUB_ENV
+          df -h > $SYSTEM_REPORT
+          free -m >> $SYSTEM_REPORT
+          
+      - name: Upload report
+        uses: actions/upload-artifact@v3
+        with:
+          name: system-report
+          path: ${{ env.SYSTEM_REPORT }}
